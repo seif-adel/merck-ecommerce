@@ -1,0 +1,28 @@
+# Production-like deployment on EKS: ECR images, ALB ingresses, secrets from AWS Secrets Manager.
+# Prerequisites in the cluster: AWS Load Balancer Controller, metrics-server, External Secrets Operator
+# with a ClusterSecretStore named "aws-secrets-manager".
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: merck-shop
+
+resources:
+  - ../../base
+  - external-secret.yaml
+
+images:
+  - name: merck-shop-backend
+    newName: <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/merck-shop/backend
+    newTag: "1.0.0"
+  - name: merck-shop-frontend
+    newName: <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/merck-shop/frontend
+    newTag: "1.0.0"
+
+patches:
+  # The placeholder Secret from the base is replaced by the ExternalSecret of the same name.
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: backend-secrets

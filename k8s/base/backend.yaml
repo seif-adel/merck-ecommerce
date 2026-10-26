@@ -1,0 +1,164 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/instance: merck-shop
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: merck-shop
+    app.kubernetes.io/managed-by: kustomize
+  # IRSA: lets the pod assume an IAM role (e.g. to call the ML API) without access keys.
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::<ACCOUNT_ID>:role/merck-shop-backend
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/instance: merck-shop
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: merck-shop
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  # No `replicas` on purpose: the HorizontalPodAutoscaler owns the count.
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0 # never drop below the current capacity during a deploy
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+      app.kubernetes.io/instance: merck-shop
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backend
+        app.kubernetes.io/instance: merck-shop
+        app.kubernetes.io/component: api
+        app.kubernetes.io/part-of: merck-shop
+    spec:
+      serviceAccountName: backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001 # created user with non-root privileges in DockerFile
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: backend
+          image: merck-shop-backend # real name and tag are set by the kustomize overlay
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: shop-config
+            - secretRef: # every key of the Secret becomes an environment variable
+                name: backend-secrets
+          resources:
+            requests: # what the scheduler reserves (and what the HPA % is measured against)
+              cpu: 100m
+              memory: 128Mi
+            limits: # hard ceiling
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe: # failing -> container is restarted
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe: # failing -> pod is removed from the Service until it recovers
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            readOnlyRootFilesystem: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/instance: merck-shop
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: merck-shop
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  type: ClusterIP # reachable only inside the cluster
+  selector:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/instance: merck-shop
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/instance: merck-shop
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: merck-shop
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  # min 1 because the demo's in-memory carts live inside one pod; use 2+ once the store is Aurora-backed.
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70 # of the 100m request
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300 # wait 5 min before shrinking to avoid flapping
+
+---
+# Internal ALB: reachable from inside the VPC only (never from the internet).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/instance: merck-shop
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: merck-shop
+    app.kubernetes.io/managed-by: kustomize
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    alb.ingress.kubernetes.io/tags: Project=merck-shop,Component=backend,ManagedBy=kustomize
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  name: http

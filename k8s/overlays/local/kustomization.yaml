@@ -1,0 +1,31 @@
+# Try it on Docker Desktop / kind / minikube: locally built images, no ALB ingresses.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: merck-shop
+
+resources:
+  - ../../base
+
+images:
+  - name: merck-shop-backend
+    newName: merck-shop-backend
+    newTag: local
+  - name: merck-shop-frontend
+    newName: merck-shop-frontend
+    newTag: local
+
+patches:
+  # There is no AWS Load Balancer Controller on a laptop
+  - patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: frontend
+  - patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: backend

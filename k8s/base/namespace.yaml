@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: merck-shop
+  labels:
+    app.kubernetes.io/part-of: merck-shop
+    app.kubernetes.io/managed-by: kustomize
+    # Kubernetes refuses pods that run as root or request extra privileges.
+    pod-security.kubernetes.io/enforce: restricted

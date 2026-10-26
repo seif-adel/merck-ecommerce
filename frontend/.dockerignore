@@ -1,0 +1,2 @@
+# Nothing to exclude: this folder holds only what the image needs.
+# Do not list "Dockerfile" here; some builders (e.g. minikube image build) then cannot find it.

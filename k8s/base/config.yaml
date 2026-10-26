@@ -1,0 +1,37 @@
+# One ConfigMap for the whole app: both Deployments load it with envFrom.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shop-config
+  labels:
+    app.kubernetes.io/name: shop-config
+    app.kubernetes.io/instance: merck-shop
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: merck-shop
+    app.kubernetes.io/managed-by: kustomize
+data:
+  # Read by the backend
+  APP_ENV: "dev"
+  LOG_LEVEL: "INFO"
+  ENABLE_DOCS: "false" # /docs would otherwise be reachable through the frontend's /api proxy
+  # Not read by the in-memory demo; wired so moving to Aurora needs no manifest change.
+  DB_HOST: "aurora.internal.example"
+  DB_NAME: "shop"
+  # Read by the frontend (nginx proxy target)
+  BACKEND_HOST: "backend"
+  BACKEND_PORT: "8000"
+---
+# Local/demo placeholder only. The aws overlay replaces this with an ExternalSecret (Secrets Manager).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secrets
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/instance: merck-shop
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: merck-shop
+    app.kubernetes.io/managed-by: kustomize
+type: Opaque
+stringData:
+  DB_PASSWORD: "CHANGE_ME"

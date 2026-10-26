@@ -1,0 +1,47 @@
+# NOT part of any kustomization. Example only: protect a control-panel path with Microsoft Entra ID (SSO).
+# The ALB itself performs the OIDC login, so unauthenticated users never reach the pods.
+#
+# Entra setup (once): App registration -> Redirect URI https://<HOST>/oauth2/idpresponse, create a client secret,
+# Enterprise application -> "Assignment required" = Yes, assign only the admin security group.
+# Create the secret the annotation points to:
+#   kubectl -n merck-shop create secret generic entra-oidc-client \
+#     --from-literal=clientID=<APP_CLIENT_ID> --from-literal=clientSecret=<CLIENT_SECRET>
+# (in production deliver it with External Secrets rather than kubectl)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-admin
+  namespace: merck-shop
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/instance: merck-shop
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: merck-shop
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]' # ALB OIDC requires HTTPS
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:<REGION>:<ACCOUNT_ID>:certificate/<ID>
+    alb.ingress.kubernetes.io/auth-type: oidc
+    alb.ingress.kubernetes.io/auth-on-unauthenticated-request: authenticate
+    alb.ingress.kubernetes.io/auth-scope: openid email profile
+    alb.ingress.kubernetes.io/auth-session-timeout: "3600"
+    alb.ingress.kubernetes.io/auth-idp-oidc: >-
+      {"issuer":"https://login.microsoftonline.com/<TENANT_ID>/v2.0",
+      "authorizationEndpoint":"https://login.microsoftonline.com/<TENANT_ID>/oauth2/v2.0/authorize",
+      "tokenEndpoint":"https://login.microsoftonline.com/<TENANT_ID>/oauth2/v2.0/token",
+      "userInfoEndpoint":"https://graph.microsoft.com/oidc/userinfo",
+      "secretName":"entra-oidc-client"}
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http

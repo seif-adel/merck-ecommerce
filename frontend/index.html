@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Merck Life Science Shop (demo)</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Merck Life Science Shop</h1>
+      <span class="badge">demo</span>
+    </header>
+
+    <p id="message" role="status" hidden></p>
+
+    <main>
+      <section aria-labelledby="products-title">
+        <h2 id="products-title">Products</h2>
+        <ul id="products" class="grid"></ul>
+      </section>
+
+      <aside aria-labelledby="cart-title">
+        <h2 id="cart-title">Your cart</h2>
+        <ul id="cart-items"></ul>
+        <p class="total">Total: <strong id="cart-total">0.00 EUR</strong></p>
+        <button id="checkout" type="button" disabled>Place order</button>
+      </aside>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

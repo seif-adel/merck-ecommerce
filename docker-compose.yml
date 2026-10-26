@@ -1,0 +1,25 @@
+services:
+  backend:
+    build: ./src/backend
+    environment:
+      APP_ENV: local
+      LOG_LEVEL: INFO
+      ENABLE_DOCS: "true"
+    ports:
+      - "8000:8000" # direct access to the API and /docs while learning
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_HOST: backend
+      BACKEND_PORT: "8000"
+    ports:
+      - "8080:8080" # the shop UI: http://localhost:8080
+    depends_on:
+      backend:
+        condition: service_healthy
